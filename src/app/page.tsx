@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 
 interface FeatureCard {
   title: string;
@@ -27,10 +28,10 @@ const features: FeatureCard[] = [
     path: "/blog-writer"
   },
   {
-    title: "구조적 응답 리더",
-    description: "JSON 형식으로 응답하여 정보 UI를 생성하는 AI",
-    emoji: "🔧",
-    path: "/structured-response"
+    title: "Cursor 퀴즈",
+    description: "Cursor AI에 대한 지식을 테스트하는 퀴즈",
+    emoji: "🧠",
+    path: "/quiz"
   }
 ];
 
@@ -50,21 +51,28 @@ export default function Home() {
         <div className="w-[1200px] mx-auto">
           <div className="grid grid-cols-2 gap-[15px]">
             {features.map((feature, index) => (
-              <Link href={feature.path} key={index} className="block w-[560px]">
-                <div className="glass-effect rounded-[20px] p-[20px] h-[150px] flex items-center cursor-pointer">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-[20px]">
+              <div key={index} className="relative group w-[560px]">
+                <Link href={feature.path} className="block">
+                  <div className="glass-effect rounded-[20px] p-[20px] h-[150px] flex flex-col justify-between cursor-pointer">
+                    <div className="flex items-start gap-[20px]">
                       <span className="text-[42px]">{feature.emoji}</span>
-                      <h2 className="text-base font-medium">
-                        {feature.title}
-                      </h2>
+                      <div>
+                        <h2 className="text-base font-medium mb-1">
+                          {feature.title}
+                        </h2>
+                        <p className="text-gray-400 text-xs leading-relaxed">
+                          {feature.description}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-gray-400 text-xs leading-relaxed">
-                      {feature.description}
-                    </p>
+                    
+                    <div className="self-end text-purple-400 flex items-center gap-1 opacity-0 transition-opacity duration-300 group-hover:opacity-100 mt-2">
+                      <span className="text-xs font-medium">바로가기</span>
+                      <ArrowRight className="size-3" />
+                    </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         </div>
