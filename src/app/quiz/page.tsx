@@ -2,9 +2,14 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, XCircle, Trophy, Brain, ArrowRight, RefreshCw } from 'lucide-react';
+import { CheckCircle, XCircle, Trophy, Brain, ArrowRight, RefreshCw, ArrowLeft, Check } from 'lucide-react';
 import AnimatedButton from '@/components/ui/AnimatedButton';
 import { cursorQuizData, QuizQuestion } from '@/lib/quiz-data';
+import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+import { useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface QuizAnswer {
   questionId: number;
@@ -36,20 +41,144 @@ interface AIAnalysis {
   }[];
 }
 
+const GENRES = [
+  { value: 'general', label: '일반상식' },
+  { value: 'science', label: '과학' },
+  { value: 'history', label: '역사' },
+  { value: 'sports', label: '스포츠' },
+];
+
 export default function QuizPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<(number | undefined)[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [showJsonResult, setShowJsonResult] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [selectedCount, setSelectedCount] = useState(5);
+  const [selectedGenre, setSelectedGenre] = useState(GENRES[0].value);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const [selectLeft, setSelectLeft] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardHeight, setCardHeight] = useState(0);
+  const router = useRouter();
 
-  const currentQuestion = cursorQuizData[currentQuestionIndex];
-  const totalQuestions = cursorQuizData.length;
+  useEffect(() => {
+    if (selectRef.current) {
+      setSelectLeft(selectRef.current.offsetLeft);
+    }
+    if (cardRef.current) {
+      setCardHeight(cardRef.current.offsetHeight);
+    }
+  }, [quizStarted]);
+
+  // 기존 문제 데이터 대신 quizQuestions 사용
+  const currentQuestion = quizQuestions[currentQuestionIndex];
+  const totalQuestions = quizQuestions.length;
+
+  // 퀴즈 시작 시 OpenAI API로 문제 받아오기
+  const startQuiz = async () => {
+    setLoadingQuestions(true);
+    setQuizQuestions([]);
+    setCurrentQuestionIndex(0);
+    setAnswers([]);
+    setAiAnalysis(null);
+    setShowJsonResult(false);
+    // 실제 OpenAI API 호출 부분 (예시)
+    try {
+      const response = await fetch('/api/openai-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          count: selectedCount,
+          genre: selectedGenre,
+        }),
+      });
+      const data = await response.json();
+      setQuizQuestions(data.questions || []);
+      setQuizStarted(true);
+    } catch (e) {
+      alert('문제 생성에 실패했습니다.');
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  // 퀴즈 리셋 시 첫 화면으로 돌아가기
+  const resetQuizAll = () => {
+    setQuizStarted(false);
+    setQuizQuestions([]);
+    setCurrentQuestionIndex(0);
+    setAnswers([]);
+    setAiAnalysis(null);
+    setShowJsonResult(false);
+  };
+
+  // 첫 화면: 문제 수/장르 선택
+  if (!quizStarted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-start bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8 pt-24">
+        <div className="relative max-w-[600px] w-full mx-auto">
+          <div ref={cardRef} className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 text-white">
+            <div className="flex items-center mb-[15px] mt-[30px]">
+              <Link href="/" className="flex items-center text-gray-400 hover:text-gray-200 transition-colors">
+                <ArrowLeft className="w-6 h-6 mr-2" />
+                <span>돌아가기</span>
+              </Link>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-center flex-1">퀴즈 생성</h1>
+            </div>
+            <div className="mb-[15px]">
+              <label className="block mb-2 font-semibold">문제 수 선택</label>
+              <select
+                ref={selectRef}
+                className="w-full p-2 rounded-lg text-black"
+                value={selectedCount}
+                onChange={e => setSelectedCount(Number(e.target.value))}
+              >
+                {[5,6,7,8,9,10].map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <div className="mb-[15px]">
+              <label className="block mb-2 font-semibold">장르 선택</label>
+              <select
+                className="w-full p-2 rounded-lg text-black"
+                value={selectedGenre}
+                onChange={e => setSelectedGenre(e.target.value)}
+              >
+                {GENRES.map(g => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+            </div>
+            <Button
+              variant="default"
+              className="w-full py-3 rounded-lg bg-white text-black font-bold text-lg mt-[15px] disabled:opacity-50"
+              onClick={startQuiz}
+              disabled={loadingQuestions}
+            >
+              {loadingQuestions ? '문제 생성 중...' : '퀴즈 시작'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleAnswerSelect = (answerIndex: number) => {
     const newAnswers = [...answers];
-    newAnswers[currentQuestionIndex] = answerIndex;
+    if (newAnswers[currentQuestionIndex] === answerIndex) {
+      // 이미 선택된 답을 한 번 더 누르면 해제
+      newAnswers[currentQuestionIndex] = undefined;
+    } else {
+      newAnswers[currentQuestionIndex] = answerIndex;
+    }
     setAnswers(newAnswers);
   };
 
@@ -62,7 +191,7 @@ export default function QuizPage() {
   };
 
   const calculateResults = () => {
-    const quizAnswers: QuizAnswer[] = cursorQuizData.map((question, index) => {
+    const quizAnswers: QuizAnswer[] = quizQuestions.map((question, index) => {
       const userAnswer = answers[index] || -1;
       const isCorrect = userAnswer === question.answer;
       
@@ -133,170 +262,45 @@ export default function QuizPage() {
     }
   };
 
-  if (showResults && aiAnalysis) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 text-white"
-          >
-            <div className="text-center mb-8">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2 }}
-                className="inline-block p-4 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full mb-4"
-              >
-                <Trophy className="w-12 h-12 text-white" />
-              </motion.div>
-              <h1 className="text-4xl font-bold mb-4">퀴즈 결과</h1>
-              <div className="text-6xl font-bold mb-4">
-                <span className={getGradeColor(aiAnalysis.detailedFeedback.grade)}>
-                  {aiAnalysis.detailedFeedback.grade}
-                </span>
-              </div>
-              <p className="text-xl text-gray-300">{aiAnalysis.detailedFeedback.message}</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8 mb-8">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-                className="bg-white/5 rounded-xl p-6"
-              >
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-400" />
-                  강점
-                </h3>
-                <ul className="space-y-2">
-                  {aiAnalysis.analysis.strengths.map((strength, index) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                      {strength}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-white/5 rounded-xl p-6"
-              >
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <XCircle className="w-5 h-5 text-red-400" />
-                  개선점
-                </h3>
-                <ul className="space-y-2">
-                  {aiAnalysis.analysis.weaknesses.map((weakness, index) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-400 rounded-full"></div>
-                      {weakness}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="bg-white/5 rounded-xl p-6 mb-8"
-            >
-              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Brain className="w-5 h-5 text-blue-400" />
-                추천사항
-              </h3>
-              <ul className="space-y-2">
-                {aiAnalysis.analysis.recommendations.map((recommendation, index) => (
-                  <li key={index} className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    {recommendation}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-
-            <div className="flex gap-4 justify-center">
-              <AnimatedButton
-                variant="rainbow"
-                animation="sparkle"
-                onClick={() => setShowJsonResult(!showJsonResult)}
-                icon={<Brain className="w-4 h-4" />}
-              >
-                {showJsonResult ? 'JSON 숨기기' : 'JSON 결과 보기'}
-              </AnimatedButton>
-              
-              <AnimatedButton
-                variant="cosmic"
-                animation="magnetic"
-                onClick={resetQuiz}
-                icon={<RefreshCw className="w-4 h-4" />}
-              >
-                다시 시작
-              </AnimatedButton>
-            </div>
-
-            <AnimatePresence>
-              {showJsonResult && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-8 bg-black/20 rounded-xl p-6"
-                >
-                  <h3 className="text-xl font-semibold mb-4">AI 분석 JSON 결과</h3>
-                  <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
-                    <code className="text-green-400">
-                      {JSON.stringify(aiAnalysis, null, 2)}
-                    </code>
-                  </pre>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8 mt-[50px]">
+      <div className="max-w-[600px] w-full mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 text-white"
         >
           {/* 헤더 */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold mb-4">Cursor AI 퀴즈</h1>
-            <p className="text-xl text-gray-300 mb-4">
-              Cursor AI에 대한 지식을 테스트해보세요!
-            </p>
-            <div className="flex justify-center items-center gap-4">
-              <div className="bg-white/20 rounded-full px-4 py-2">
-                문제 {currentQuestionIndex + 1} / {totalQuestions}
-              </div>
-              <div className="bg-white/20 rounded-full px-4 py-2">
-                진행률: {Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100)}%
-              </div>
+          <div className="mb-8">
+            <div>
+              <Link href="/" className="flex items-center text-gray-400 hover:text-gray-200 transition-colors">
+                <ArrowLeft className="w-6 h-6 mr-2" />
+                <span>돌아가기</span>
+              </Link>
+            </div>
+            <div className="mt-4">
+              <h1 className="text-4xl font-bold text-center">퀴즈</h1>
             </div>
           </div>
 
-          {/* 진행바 */}
-          <div className="w-full bg-white/20 rounded-full h-2 mb-8">
-            <motion.div
-              className="bg-gradient-to-r from-cyan-400 to-purple-500 h-2 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }}
-              transition={{ duration: 0.5 }}
-            />
+          {/* 진행바 + 진행률 텍스트 */}
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-base text-white/80 font-medium">
+                {currentQuestionIndex + 1} / {totalQuestions}
+              </span>
+              <span className="text-base text-white/80 font-medium">
+                진행률: {Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-white/20 rounded-full h-2">
+              <motion.div
+                className="bg-gradient-to-r from-cyan-400 to-purple-500 h-2 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
           </div>
 
           {/* 문제 */}
@@ -305,68 +309,162 @@ export default function QuizPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="mb-8"
+            className="mb-8 flex flex-col gap-8"
           >
-            <h2 className="text-2xl font-semibold mb-6">
+            <h2 className="text-2xl font-semibold mb-6 text-center">
               {currentQuestion.question}
             </h2>
 
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-              {currentQuestion.choices.map((choice, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <button
-                    onClick={() => handleAnswerSelect(index)}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                      answers[currentQuestionIndex] === index
-                        ? 'border-cyan-400 bg-cyan-400/20 text-cyan-100'
-                        : 'border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/10'
-                    }`}
+            {/* 선택지, 결과, 버튼을 한 div 아래에 배치 */}
+            <div style={{ display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
+              <div className="flex flex-col gap-2" style={{ marginBottom: '10px' }}>
+                {currentQuestion.choices.map((choice: any, index: number) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        answers[currentQuestionIndex] === index
-                          ? 'border-cyan-400 bg-cyan-400'
-                          : 'border-white/40'
-                      }`}>
+                    <Button
+                      variant="default"
+                      size="lg"
+                      onClick={() => handleAnswerSelect(index)}
+                      className={`w-full text-left py-6 rounded-xl border-2 transition-all duration-200 text-lg font-medium mb-[10px] ${answers[currentQuestionIndex] === index ? '!bg-gray-200 !text-black border-gray-300' : '!bg-white !text-black border-gray-200 hover:!bg-gray-100'}`}
+                      style={{ minHeight: 48 }}
+                      disabled={!!aiAnalysis}
+                    >
+                      <span className="font-medium text-left w-full flex items-center justify-between">
+                        <span>{choice}</span>
                         {answers[currentQuestionIndex] === index && (
-                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                          <Check className="w-6 h-6 text-black ml-2" />
                         )}
+                      </span>
+                    </Button>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* 마지막 문제에서 결과가 있으면 결과 컴포넌트 표시 */}
+              {currentQuestionIndex === totalQuestions - 1 && aiAnalysis && (
+                <div style={{ marginTop: '15px', marginBottom: '15px' }}>
+                  {showJsonResult ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-black/20 rounded-xl p-6"
+                    >
+                      <h3 className="text-xl font-semibold mb-4">AI 분석 JSON 결과</h3>
+                      <pre className="bg-black/50 p-4 rounded-lg overflow-x-auto text-sm">
+                        <code className="text-green-400">
+                          {JSON.stringify(aiAnalysis, null, 2)}
+                        </code>
+                      </pre>
+                      <div className="flex gap-4 justify-center mt-6">
+                        <AnimatedButton
+                          variant="rainbow"
+                          animation="sparkle"
+                          onClick={() => setShowJsonResult(false)}
+                          icon={<Brain className="w-4 h-4" />}
+                        >
+                          결과 화면으로 돌아가기
+                        </AnimatedButton>
                       </div>
-                      <span className="font-medium">{choice}</span>
-                    </div>
-                  </button>
-                </motion.div>
-              ))}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 text-white"
+                    >
+                      {/* 강점/개선점/추천사항 제거, 결과 테이블만 남김 */}
+                      <div className="overflow-x-auto mb-4" style={{ marginBottom: '15px' }}>
+                        <table className="min-w-full text-sm text-left border border-white/20 rounded-lg overflow-hidden">
+                          <thead className="bg-white/10">
+                            <tr>
+                              <th className="px-4 py-2">문항</th>
+                              <th className="px-4 py-2">내 답</th>
+                              <th className="px-4 py-2">정답</th>
+                              <th className="px-4 py-2">정오</th>
+                              <th className="px-4 py-2">피드백</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {aiAnalysis.questionAnalysis.map((q, idx) => (
+                              <tr key={q.questionId} className="border-t border-white/10">
+                                <td className="px-4 py-2">{q.questionId}</td>
+                                <td className="px-4 py-2">{q.userAnswer + 1}</td>
+                                <td className="px-4 py-2">{q.correctAnswer + 1}</td>
+                                <td className={`px-4 py-2 text-center ${q.isCorrect ? 'bg-green-900' : 'bg-red-900'}`}>
+                                  {q.isCorrect ? (
+                                    <CheckCircle className="inline w-5 h-5" style={{ color: '#10b981' }} />
+                                  ) : (
+                                    <XCircle className="inline w-5 h-5" style={{ color: '#ef4444' }} />
+                                  )}
+                                </td>
+                                <td className="px-4 py-2">{q.feedback}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex gap-4 justify-center mt-4" style={{ gap: '15px' }}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowJsonResult(true)}
+                          className="flex items-center !bg-white !text-black !border-black"
+                        >
+                          <Brain className="w-4 h-4 mr-2" /> JSON 결과 보기
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={resetQuizAll}
+                          className="flex items-center !bg-white !text-black !border-black"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" /> 다시 시작
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+
+              {/* 하단 네비게이션 버튼: flex justify-between, marginTop: 15px */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px' }}>
+                {/* 왼쪽: 이전 버튼 (1번 문항이 아닐 때만) */}
+                {currentQuestionIndex !== 0 && !(currentQuestionIndex === totalQuestions - 1 && aiAnalysis) ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentQuestionIndex(currentQuestionIndex - 1)}
+                    className="flex items-center bg-white text-black border border-black"
+                  >
+                    <ArrowLeft className="w-5 h-5 mr-2" />
+                    이전
+                  </Button>
+                ) : <div />}
+
+                {/* 오른쪽: 다음/결과 확인 버튼 */}
+                {!(currentQuestionIndex === totalQuestions - 1 && aiAnalysis) && (
+                  <Button
+                    variant="default"
+                    onClick={handleNextQuestion}
+                    disabled={answers[currentQuestionIndex] === undefined}
+                    className="flex items-center bg-white text-black border border-black"
+                  >
+                    {currentQuestionIndex === totalQuestions - 1 ? (
+                      <>
+                        <Trophy className="w-5 h-5 mr-2" /> 결과 확인
+                      </>
+                    ) : (
+                      <>
+                        다음 <ArrowRight className="w-5 h-5 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
           </motion.div>
-
-          {/* 버튼 */}
-          <div className="flex justify-between">
-            <AnimatedButton
-              variant="outline"
-              animation="glow"
-              onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
-              disabled={currentQuestionIndex === 0}
-              className="border-white/20 text-white hover:bg-white/10"
-            >
-              이전
-            </AnimatedButton>
-
-            <AnimatedButton
-              variant="rainbow"
-              animation="sparkle"
-              onClick={handleNextQuestion}
-              disabled={answers[currentQuestionIndex] === undefined}
-              icon={currentQuestionIndex === totalQuestions - 1 ? <Trophy className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-            >
-              {currentQuestionIndex === totalQuestions - 1 ? '결과 보기' : '다음'}
-            </AnimatedButton>
-          </div>
 
           {isSubmitting && (
             <motion.div

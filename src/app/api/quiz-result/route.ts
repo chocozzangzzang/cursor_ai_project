@@ -61,12 +61,21 @@ ${answers.map((answer: any, index: number) =>
           role: "user",
           content: prompt
         }
-      ],
-      response_format: { type: "json_object" },
+      ]
+      // response_format 옵션 제거
     });
 
     const result = completion.choices[0].message.content;
-    const jsonResult = JSON.parse(result || '{}');
+    let jsonResult;
+    try {
+      jsonResult = JSON.parse(result || '{}');
+    } catch (e) {
+      console.error('OpenAI 응답 파싱 오류:', result);
+      return NextResponse.json(
+        { success: false, error: 'AI 응답이 올바른 JSON이 아닙니다.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
